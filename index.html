@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>METT-4 KSDAE — Penilaian Efektivitas Pengelolaan Kawasan Konservasi</title>
+  <meta name="description" content="Versi web dari tool Management Effectiveness Tracking Tool (METT-4) KSDAE v4.4. Seluruh rumus, teks, dan skor mengikuti file Excel asli.">
+  <meta name="theme-color" content="#398787">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="assets/img/icon-192.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <a class="skip" href="#main">Lewati ke konten</a>
+  <header class="topbar">
+    <button class="icon-btn nav-toggle" id="navToggle" aria-label="Buka/tutup menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+    <a class="brand" href="#/s/Tentang">
+      <img src="assets/img/logo-kemenhut.png" alt="" width="30" height="30">
+      <span><strong>METT-4</strong> <span class="muted">KSDAE v4.4</span></span>
+    </a>
+    <div class="current" id="currentName" title="Penilaian yang sedang dibuka"></div>
+    <div class="top-actions">
+      <span class="save-state" id="saveState" aria-live="polite"></span>
+      <button class="btn btn-ghost" id="btnOpen" title="Buka file penilaian (.json)">Buka</button>
+      <button class="btn btn-primary" id="btnSave" title="Simpan penilaian ke file (.json)">Simpan file</button>
+    </div>
+  </header>
+  <div class="layout">
+    <nav class="sidebar" id="sidebar" aria-label="Navigasi lembar"></nav>
+    <main id="main" class="main" tabindex="-1">
+      <noscript><div class="page"><p>Aplikasi ini memerlukan JavaScript.</p></div></noscript>
+    </main>
+  </div>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="data/workbook.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/model.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/xlsx.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

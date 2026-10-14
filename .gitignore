@@ -1,0 +1,6 @@
+tests/out/
+__pycache__/
+*.pyc
+.DS_Store
+# file Excel asli tidak disimpan di repo
+*.xlsm
