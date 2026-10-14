@@ -1,0 +1,16 @@
+name: Uji kesetaraan rumus
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Mesin web vs nilai cache Excel
+        run: node tests/check_excel_cache.js
+      - name: Logika makro, validasi, ekspor
+        run: node tests/test_logic.js
