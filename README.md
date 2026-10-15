@@ -1,6 +1,11 @@
 # METT-4 KSDAE — Versi Web
 
-Versi web dari **Management Effectiveness Tracking Tool (METT-4) KSDAE v4.4** untuk penilaian efektivitas pengelolaan kawasan konservasi di Indonesia. Aplikasi ini dibangun dari file `METT 4 _Indonesia_KSDAE_VER4.4.xlsm` dan dapat dijalankan langsung dari **GitHub Pages**: tanpa server, tanpa database, tanpa instalasi.
+Versi web dari **Management Effectiveness Tracking Tool (METT-4) KSDAE v4.4** untuk penilaian efektivitas pengelolaan kawasan konservasi di Indonesia. Aplikasi ini dibangun dari file `METT 4 _Indonesia_KSDAE_VER4.4.xlsm` dan dijalankan dari **GitHub Pages**.
+
+Ada dua mode:
+
+* **Mode lokal** (bawaan): data tersimpan di browser masing-masing dan di file .json. Tidak perlu server.
+* **Mode online**: semua orang yang membuka link mengisi **satu penilaian yang sama** (mis. 3 kelompok sekaligus). Data tersimpan di Google Sheet milik admin lewat Google Apps Script. Pemasangan sekitar 15 menit; ikuti **[docs/PANDUAN-ONLINE.md](docs/PANDUAN-ONLINE.md)**.
 
 > **Prinsip utama: file Excel adalah acuan.** Teks pertanyaan, pilihan jawaban, panduan, daftar dropdown, **rumus**, dan aturan skor tidak ditulis ulang. Semuanya diambil otomatis dari file Excel oleh `tools/extract.py`. Rumus Excel asli (1.907 rumus) dihitung oleh mesin rumus di browser. Hasilnya diuji sama dengan Excel (lihat [Pengujian](#pengujian)).
 
@@ -22,9 +27,10 @@ Versi web dari **Management Effectiveness Tracking Tool (METT-4) KSDAE v4.4** un
 Fitur lain:
 
 * **Simpan otomatis** di browser, plus **Simpan file / Buka** (.json) untuk berpindah perangkat atau mengirim ke pusat.
+* **Mode online:** isian bersama banyak kelompok, sinkron otomatis per kolom, tetap jalan saat sinyal putus, dan **Riwayat Perubahan** dengan tombol *Kembalikan*.
 * **Isi skor tahun lalu** dari file penilaian sebelumnya.
 * Tetap **bisa dipakai tanpa internet** setelah halaman pernah dibuka sekali.
-* **Privasi:** tidak ada data yang dikirim ke server mana pun.
+* **Privasi:** pada mode lokal tidak ada data yang dikirim ke server mana pun. Pada mode online, data hanya dikirim ke Google Sheet milik admin.
 
 ## Menjalankan di GitHub Pages
 
@@ -66,13 +72,17 @@ js/engine.js            mesin rumus Excel (SUM, IF, COUNTIF, CONCAT, TEXT, refer
 js/model.js             data penilaian + logika makro VBA + validasi + ekspor
 js/charts.js            grafik SVG dari definisi grafik Excel
 js/xlsx.js              penulis/pembaca XLSX tanpa pustaka luar
+js/sync.js              sinkronisasi mode online (per kolom, antrean offline)
+js/config.js            PENGATURAN: isi SYNC_URL untuk mode online
 js/app.js               halaman & interaksi
+backend/Code.gs         backend Google Apps Script untuk mode online
 sw.js, manifest…        mode offline (PWA)
 assets/img/             logo & sampul dari file Excel
 tools/extract.py        Excel (.xlsm) → data/workbook.js
 tools/vba_reader.py     pembaca kode makro VBA dari .xlsm
 tests/                  pengujian kesetaraan dengan Excel
 docs/TEMUAN.md          kejanggalan pada file asli & keputusan penanganannya
+docs/PANDUAN-ONLINE.md  cara memasang mode online (Google Sheet + Apps Script)
 ```
 
 ## Memperbarui bila ada versi Excel baru
@@ -97,8 +107,10 @@ Perubahan teks, opsi, dan rumus akan **otomatis** ikut. Perubahan **struktur** (
 | Logika makro, validasi, ekspor | `node tests/test_logic.js` | 240 lulus |
 | 6 skenario isian: mesin web vs file Excel asli yang dihitung LibreOffice | `node tests/make_scenarios.js tests/out` lalu `python3 tests/compare_with_excel.py "<file .xlsm>" tests/out` | 11.442 perbandingan, 0 beda (2 perbedaan LibreOffice–Excel dijelaskan di TEMUAN.md) |
 | Antarmuka di browser (Playwright) | `node tests/e2e.js http://localhost:8000/` | lulus |
+| Backend `Code.gs` (dijalankan di atas tiruan layanan Google) | `node tests/test_sync_backend.js` | 20 lulus |
+| Mode online: 3 browser mengisi bersamaan, konflik, putus-sambung, riwayat | `node tests/sync_server.js 8770 8771` lalu `node tests/e2e_online.js` | 26 lulus |
 
-Dua uji pertama juga berjalan otomatis di GitHub Actions (`.github/workflows/tests.yml`) setiap ada perubahan.
+Uji mesin rumus, logika, dan backend juga berjalan otomatis di GitHub Actions (`.github/workflows/tests.yml`) setiap ada perubahan.
 
 ## Temuan pada file asli
 

@@ -1,8 +1,8 @@
 /* METT-4 Web — service worker: aplikasi tetap bisa dibuka tanpa internet setelah kunjungan pertama. */
-const CACHE = 'mett4-ksdae-v1.0.0';
+const CACHE = 'mett4-ksdae-v1.1.0';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
-  'data/workbook.js', 'js/engine.js', 'js/model.js', 'js/charts.js', 'js/xlsx.js', 'js/app.js',
+  'data/workbook.js', 'js/engine.js', 'js/model.js', 'js/charts.js', 'js/xlsx.js', 'js/sync.js', 'js/config.js', 'js/app.js',
   'assets/img/logo-kemenhut.png', 'assets/img/sampul-mett4.jpg',
   'assets/img/icon-192.png', 'assets/img/icon-512.png',
 ];
