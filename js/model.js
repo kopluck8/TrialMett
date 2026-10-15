@@ -263,6 +263,49 @@
     onChange(fn) { this.listeners.push(fn); }
     emit(info) { this.state.updated = new Date().toISOString(); for (const fn of this.listeners) fn(info || {}); }
 
+    // ---- data bersama (sinkronisasi per sel)
+    /** Kunci turunan (skor C6 hasil VBA) tidak dikirim — selalu dihitung ulang dari pilihan jawaban. */
+    isDerivedKey(k) {
+      if (!this._derived) this._derived = new Set(this.schema.questions.map((q) => q.scoreKey));
+      return this._derived.has(k);
+    }
+    /** Semua isian yang perlu dibagikan: {kunci: nilai}. Kontrol (radio/checkbox) memakai kunci "Sheet!#Nama". */
+    syncMap() {
+      const out = {};
+      for (const [k, v] of Object.entries(this.state.inputs)) if (!this.isDerivedKey(k)) out[k] = v === undefined ? null : v;
+      for (const [k, v] of Object.entries(this.state.controls)) out[k] = !!v;
+      out['__app!finalized'] = this.state.finalized ? (this.state.finalizedAt || true) : null;
+      return out;
+    }
+    /** Kelompok kunci yang harus dikirim/diterima bersama agar satu butir tetap konsisten. */
+    expandSyncGroups(keys) {
+      if (!this._groups) {
+        this._groups = new Map();
+        for (const q of this.schema.questions) {
+          const g = [q.naKey].concat(q.options.map((o) => q.sheet + '!#' + o.name), q.boxes.map((b) => q.sheet + '!#' + b.name)).filter(Boolean);
+          for (const k of g) this._groups.set(k, g);
+        }
+      }
+      const out = new Set();
+      for (const k of keys) { const g = this._groups.get(k); if (g) g.forEach((x) => out.add(x)); else out.add(k); }
+      return Array.from(out);
+    }
+    inSyncGroup(k) { this.expandSyncGroups([]); return this._groups.has(k); }
+    /** Terapkan perubahan dari server (orang lain) */
+    applyRemote(changes) {
+      const keys = [];
+      for (const { k, v } of changes) {
+        keys.push(k);
+        if (k === '__app!finalized') {
+          this.state.finalized = !!v; this.state.finalizedAt = typeof v === 'string' ? v : undefined;
+        } else if (k.includes('!#')) this.state.controls[k] = !!v;
+        else this.state.inputs[k] = v === undefined ? null : v;
+      }
+      this.applyVba();
+      this.engine.invalidate();
+      this.emit({ remote: true, keys });
+    }
+
     // ---- nilai sel
     get(key) { const { sheet, addr } = splitKey(key); return this.engine.get(sheet, addr); }
     display(key) { const { sheet, addr } = splitKey(key); return this.engine.display(sheet, addr); }

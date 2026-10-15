@@ -8,6 +8,9 @@
   'use strict';
   const WB = window.METT_WB, E = window.MettEngine, M = window.MettModel, C = window.MettCharts, X = window.MettXlsx;
   const model = new M.Model(WB);
+  const CFG = window.METT_CONFIG || {};
+  const ONLINE = !!(CFG.SYNC_URL && /^https?:\/\//.test(CFG.SYNC_URL));
+  const sync = ONLINE ? new window.MettSync.Sync(model, CFG.SYNC_URL, { pollMs: (CFG.POLL_SECONDS || 6) * 1000 }) : null;
   const DAFTAR = M.DAFTAR;
   const ATTR = 'Atribut Kawasan', THREAT = ' Penilaian Ancaman';
   const $ = (s, el) => (el || document).querySelector(s);
@@ -34,6 +37,7 @@
     saveTimer = setTimeout(persistNow, 400);
   }
   function persistNow() {
+    if (ONLINE) { sync.saveLocal(); updateHeader(); return; }
     const s = model.state;
     const ok = LS.set(LS_A + s.id, model.toFile());
     const sum = model.summary();
@@ -78,7 +82,8 @@
     pages.push({ id: 's/' + encodeURIComponent(s.name), sheet: s.name, type, title: ALIAS[s.name] || s.name.trim() });
   }
   const appPages = [
-    { id: 'data', type: 'data', title: 'Kelola Data & Ekspor' },
+    { id: 'data', type: 'data', title: ONLINE ? 'Data Bersama & Ekspor' : 'Kelola Data & Ekspor' },
+    ...(ONLINE ? [{ id: 'riwayat', type: 'riwayat', title: 'Riwayat Perubahan' }] : []),
     { id: 'rekap', type: 'rekap', title: 'Rekap Multi-Kawasan' },
     { id: 'info', type: 'info', title: 'Tentang Aplikasi Ini' },
   ];
@@ -714,7 +719,21 @@
     const items = list.map((x) => `<tr><td>${esc(x.name)}${x.id === model.state.id ? ' <span class="badge ok">sedang dibuka</span>' : ''}</td><td>${esc(x.year || '')}</td>
       <td class="num">${x.total != null ? esc(E.formatValue(x.total)) + ' / ' + esc(E.formatValue(x.max)) : ''}</td><td>${esc(new Date(x.updated).toLocaleString('id-ID'))}</td>
       <td style="white-space:nowrap">${x.id === model.state.id ? '' : `<button class="btn btn-sm" data-open-saved="${esc(x.id)}">Buka</button> `}<button class="btn btn-sm btn-danger" data-del-saved="${esc(x.id)}">Hapus</button></td></tr>`).join('');
-    return `<div class="page">
+    const head = ONLINE ? `
+      <h1 class="page-h">Data Bersama &amp; Ekspor</h1>
+      <p class="page-sub">Mode online: semua orang yang membuka link ini mengisi <strong>satu penilaian yang sama</strong>. Isian tersimpan di Google Sheet milik admin dan tersinkron otomatis.</p>
+      <div class="card"><div class="bar-title">Status sinkronisasi</div><div class="card-body">
+        <p><strong>${esc($('#currentName').textContent)}</strong><br><span class="small muted">Progres: ${prog.done} dari ${prog.total} butir lengkap${prog.warn ? `, ${prog.warn} perlu dilengkapi` : ''}.</span></p>
+        <p class="small">${esc(syncText())}${sync.error ? ` — <span style="color:var(--danger)">${esc(sync.error)}</span>` : ''}<br>
+          Nama pengisi di perangkat ini: <strong>${esc(sync.by || '(belum diisi)')}</strong> <button class="btn btn-sm" data-act="set-name">Ubah</button></p>
+        <div class="toolbar">
+          <button class="btn btn-teal" data-act="sync-now">Sinkronkan sekarang</button>
+          <button class="btn btn-primary" data-act="save-file">Simpan cadangan (.json)</button>
+          <button class="btn" data-act="open-file">Unggah file .json ke data bersama…</button>
+          <a class="btn" href="#/riwayat">Riwayat perubahan</a>
+        </div>
+        <p class="small muted">Simpan cadangan secara berkala (mis. di akhir setiap sesi). Admin juga dapat melihat semua isian dan riwayatnya langsung di Google Sheet.</p>
+      </div></div>` : `
       <h1 class="page-h">Kelola Data &amp; Ekspor</h1>
       <p class="page-sub">Data tidak dikirim ke server mana pun. Penilaian tersimpan di browser ini dan dapat disimpan sebagai file.</p>
       <div class="card"><div class="bar-title">Penilaian yang sedang dibuka</div><div class="card-body">
@@ -724,7 +743,8 @@
           <button class="btn" data-act="open-file">Buka file (.json)</button>
           <button class="btn" data-act="new">Penilaian baru</button>
           <button class="btn" data-act="duplicate">Duplikat sebagai penilaian baru</button>
-        </div></div></div>
+        </div></div></div>`;
+    return `<div class="page">${head}
       <div class="card"><div class="bar-title">Finalisasi</div><div class="card-body">
         ${msgs.length ? `<div class="alert alert-warn"><strong>${msgs.length} isian wajib belum lengkap</strong> (aturan sama dengan pesan pada file Excel):</div>
           <ul class="small">${msgs.slice(0, 60).map((m) => `<li><a href="${hrefSheet(m.q.sheet)}">${esc(m.q.title)}</a> — ${esc(m.msg)}</li>`).join('')}</ul>`
@@ -738,10 +758,49 @@
         <div class="toolbar"><button class="btn btn-primary" data-act="export-xlsx">Unduh XLSX (3 sheet)</button>
           <button class="btn" data-act="export-csv" data-i="0">CSV: PA attributes</button><button class="btn" data-act="export-csv" data-i="1">CSV: Threat data</button><button class="btn" data-act="export-csv" data-i="2">CSV: Assessment data</button></div>
       </div></div>
-      <div class="card"><div class="bar-title">Penilaian yang tersimpan di browser ini</div>
+      ${ONLINE ? '' : `<div class="card"><div class="bar-title">Penilaian yang tersimpan di browser ini</div>
         ${items ? `<div class="tbl-wrap"><table class="grid compact"><thead><tr><th>Kawasan</th><th>Tahun</th><th class="num">Skor</th><th>Terakhir diubah</th><th></th></tr></thead><tbody>${items}</tbody></table></div>` : '<div class="card-body muted">Belum ada.</div>'}
-      </div></div>`;
+      </div>`}</div>`;
   };
+
+  // ---- Riwayat perubahan (mode online)
+  function keyLabel(k) {
+    const i = k.lastIndexOf('!');
+    const sheet = k.slice(0, i), addr = k.slice(i + 1);
+    if (sheet === '__app') return 'Status final';
+    const q = model.question(sheet);
+    if (q) {
+      if (addr.startsWith('#')) { const o = q.options.find((x) => '#' + x.name === addr); const b = q.boxes.find((x) => '#' + x.name === addr); return q.title + ' — ' + (o ? 'jawaban ' + o.letter : b ? 'pernyataan ' + b.text.slice(0, 4) : 'kontrol'); }
+      if (k === q.naReasonKey) return q.title + ' — penjelasan tidak relevan';
+      if (k === q.justKey) return q.title + ' — bukti & justifikasi';
+      if (k === q.actionKey) return q.title + ' — aksi';
+      const src = q.sources.find((x) => x.textKey === k); if (src) return q.title + ' — rincian sumber: ' + src.label;
+    }
+    for (const qq of model.schema.questions) {
+      if (k === qq.naKey) return qq.title + ' — tidak relevan';
+      const src = qq.sources.find((x) => x.key === k); if (src) return qq.title + ' — sumber: ' + src.label;
+    }
+    if (sheet === ATTR) { const l = raw(ATTR, 'A' + addr.replace(/[A-Z]+/, '')); return 'Atribut Kawasan — ' + clean(l) + (addr[0] === 'C' ? ' (keterangan)' : ''); }
+    if (sheet === THREAT) { const r = addr.replace(/[A-Z]+/, ''); return 'Ancaman — ' + clean(raw(THREAT, 'B' + r) || 'baris ' + r) + ' — ' + clean(raw(THREAT, addr.replace(/\d+/, '') + '2').split('\n')[0]); }
+    return sheet.trim() + ' ' + addr;
+  }
+  const showVal = (v) => (v === null || v === undefined || v === '' ? '∅' : v === true ? '✔' : v === false ? '✘' : String(v));
+  let riwayatCache = null;
+  R.riwayat = () => {
+    const rows = (riwayatCache || []).map((x, i) => `<tr><td style="white-space:nowrap">${esc(new Date(x.t).toLocaleString('id-ID'))}</td><td>${esc(x.by)}</td>
+      <td>${esc(keyLabel(x.k))}</td><td class="pre small">${esc(showVal(x.old)).slice(0, 300)}</td><td class="pre small">${esc(showVal(x.v)).slice(0, 300)}</td>
+      <td><button class="btn btn-sm" data-restore="${i}" title="Kembalikan nilai lama">Kembalikan</button></td></tr>`).join('');
+    if (!riwayatCache) setTimeout(loadRiwayat, 0);
+    return `<div class="page wide"><h1 class="page-h">Riwayat Perubahan</h1>
+      <p class="page-sub">300 perubahan terakhir pada data bersama. Gunakan <strong>Kembalikan</strong> bila ada isian yang tertimpa atau terhapus tidak sengaja.</p>
+      <div class="toolbar"><button class="btn" data-act="reload-log">Muat ulang</button></div>
+      <div class="card"><div class="tbl-wrap"><table class="grid compact"><thead><tr><th>Waktu</th><th>Oleh</th><th>Isian</th><th>Nilai lama</th><th>Nilai baru</th><th></th></tr></thead>
+      <tbody>${riwayatCache ? (rows || '<tr><td colspan="6" class="muted">Belum ada perubahan.</td></tr>') : '<tr><td colspan="6" class="muted">Memuat…</td></tr>'}</tbody></table></div></div></div>`;
+  };
+  async function loadRiwayat() {
+    try { riwayatCache = await sync.log(300); } catch (e) { riwayatCache = []; toast('Gagal memuat riwayat: ' + e.message); }
+    if (currentPage && currentPage.type === 'riwayat') render();
+  }
 
   // ---- Rekap
   let rekapItems = [];
@@ -776,7 +835,7 @@
     <p>• Di Excel skor baru tertulis saat Anda pindah sheet; di sini skor langsung diperbarui.\n• Tombol makro ekspor diganti tombol unduh XLSX/CSV.\n• Tata letak cetak dibuat semirip mungkin, bukan identik piksel.\n• Nama hari/bulan pada Berita Acara memakai bahasa Indonesia (seperti Excel berlokal Indonesia); angka memakai koma desimal.</p>
     <h2>Temuan pada file asli</h2>
     <p>Beberapa rumus/makro pada file asli mengandung kejanggalan. Semuanya <strong>dipertahankan apa adanya</strong> kecuali satu kesalahan makro yang membuat skor 7a-c tidak pernah terhitung. Daftar lengkap: <a href="docs/TEMUAN.md" target="_blank" rel="noopener">docs/TEMUAN.md</a>.</p>
-    <h2>Privasi</h2><p>Tidak ada data yang dikirim ke server. Semua isian tersimpan di browser (localStorage) dan di file yang Anda simpan sendiri.</p>
+    <h2>Mode & privasi</h2><p>${ONLINE ? 'Mode ONLINE: isian disimpan di Google Sheet milik admin dan dibagikan ke semua orang yang membuka link ini. Setiap perubahan tercatat di Riwayat Perubahan.' : 'Mode lokal: tidak ada data yang dikirim ke server. Semua isian tersimpan di browser (localStorage) dan di file yang Anda simpan sendiri. Untuk isian bersama banyak kelompok, lihat docs/PANDUAN-ONLINE.md.'}</p>
   </div></div></div>`;
 
   // ================================================================ router & render
@@ -830,8 +889,24 @@
   const cellOut = (v) => (v instanceof E.XlError ? { error: v.error } : v);
 
   document.addEventListener('click', async (ev) => {
-    const b = ev.target.closest('[data-act],[data-open-saved],[data-del-saved],[data-rekap-del]');
+    const b = ev.target.closest('[data-act],[data-open-saved],[data-del-saved],[data-rekap-del],[data-restore]');
     if (!b) return;
+    if (b.dataset.restore) {
+      const x = riwayatCache[+b.dataset.restore];
+      if (!confirm('Kembalikan "' + keyLabel(x.k) + '" ke nilai lama?\n\n' + showVal(x.old).slice(0, 200))) return;
+      const k = x.k;
+      const qq = model.schema.questions.find((q) => k === q.naKey || k.startsWith(q.sheet + '!#'));
+      if (k === '__app!finalized') { model.state.finalized = !!x.old; model.state.finalizedAt = typeof x.old === 'string' ? x.old : undefined; model.emit(); }
+      else if (qq && k === qq.naKey) model.setNA(qq, x.old === true);
+      else if (qq && qq.options.some((o) => k === qq.sheet + '!#' + o.name)) {
+        const name = k.slice(k.indexOf('!#') + 2);
+        if (x.old === true) { if (model.isNA(qq)) model.setNA(qq, false); model.selectOption(qq, name); }
+        else { qq.options.forEach((o) => model.setControl(qq.sheet, o.name, false)); model.afterChange({ key: k }); }
+      } else if (qq && qq.boxes.some((b) => k === qq.sheet + '!#' + b.name)) model.toggleBox(qq, k.slice(k.indexOf('!#') + 2), x.old === true);
+      else if (k.includes('!#')) { model.state.controls[k] = !!x.old; model.afterChange({ key: k }); }
+      else model.set(k, x.old);
+      await sync.push(); riwayatCache = null; render(); toast('Nilai dikembalikan'); return;
+    }
     if (b.dataset.openSaved) { persistNow(); if (loadSaved(b.dataset.openSaved)) { toast('Penilaian dibuka'); render(); } return; }
     if (b.dataset.delSaved) {
       if (!confirm('Hapus penilaian ini dari browser? (File yang sudah disimpan tidak terpengaruh)')) return;
@@ -843,6 +918,9 @@
     if (b.dataset.rekapDel) { rekapItems.splice(+b.dataset.rekapDel, 1); render(); return; }
     switch (b.dataset.act) {
       case 'save-file': saveFile(); break;
+      case 'set-name': askName(true); break;
+      case 'sync-now': await sync.tick(); render(); toast(syncText()); break;
+      case 'reload-log': riwayatCache = null; render(); break;
       case 'open-file': openFile(); break;
       case 'new': if (confirm('Mulai penilaian baru? Penilaian saat ini tetap tersimpan di browser.')) { startNew(); location.hash = '#/s/Tentang'; render(); toast('Penilaian baru dibuat'); } break;
       case 'duplicate': startNew(model.state); render(); toast('Salinan dibuat sebagai penilaian baru'); break;
@@ -902,6 +980,14 @@
     if (!f) return;
     try {
       const st = M.Model.parseFile(await f.text());
+      if (ONLINE) {
+        if (!confirm('Unggah isi file "' + f.name + '" ke DATA BERSAMA?\n\nSemua isian yang ada di file akan menimpa isian yang sama di data bersama dan terlihat oleh semua pengguna. Nilai lama tetap tercatat di Riwayat.')) return;
+        model.load(st);
+        await sync.push();
+        render();
+        toast('File diunggah ke data bersama: ' + f.name);
+        return;
+      }
       persistNow();
       model.load(st);
       persistNow();
@@ -918,15 +1004,84 @@
   window.addEventListener('hashchange', render);
   window.addEventListener('beforeunload', () => { clearTimeout(saveTimer); persistNow(); });
 
-  model.onChange(() => {
-    persistSoon();
-    refreshComputed();
+  model.onChange((info) => {
+    if (ONLINE) { if (!info.remote && sync.loaded) sync.schedulePush(); }
+    else persistSoon();
+    if (info.remote) applyRemoteToDom(info.keys || []);
+    else refreshComputed();
     if (typeof model.onceChange === 'function') model.onceChange();
   });
 
+  // ---- perubahan dari pengguna lain → perbarui tampilan tanpa mengganggu yang sedang mengetik
+  function applyRemoteToDom(keys) {
+    const main = $('#main');
+    const ae = document.activeElement;
+    const typing = ae && main.contains(ae) && (/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName) || ae.isContentEditable);
+    const p = currentPage;
+    if (!typing && p && p.type !== 'ancaman') { render(); return; }
+    $$('[data-key]', main).forEach((el) => {
+      if (el === ae || el.contains(ae)) return;
+      const k = el.dataset.key, kind = el.dataset.kind;
+      if (!keys.includes(k)) return;
+      if (kind === 'bool') el.checked = model.get(k) === true;
+      else if (kind === 'date') { const v = model.get(k); if (typeof v === 'number' && v > 0) { const d = E.serialToParts(v); el.value = d.y + '-' + String(d.m).padStart(2, '0') + '-' + String(d.d).padStart(2, '0'); } else el.value = ''; }
+      else if (kind === 'multi') { const w = el.parentElement; const tmp = document.createElement('div'); tmp.innerHTML = fieldMulti(k, model.options(k) || [], ''); w.innerHTML = tmp.firstChild.innerHTML; bindFields(w); }
+      else el.value = model.inputText(k);
+    });
+    $$('[data-edit]', main).forEach((el) => { if (el !== ae && keys.includes(el.dataset.edit)) el.textContent = model.inputText(el.dataset.edit); });
+    if (p && p.type === 'question') {
+      const q = model.question(p.sheet), na = model.isNA(q);
+      $$('input[data-opt]', main).forEach((el) => { el.checked = model.control(q.sheet, el.dataset.opt); el.disabled = na; el.closest('.opt').classList.toggle('selected', el.checked); });
+      $$('input[data-box]', main).forEach((el) => { el.checked = model.control(q.sheet, el.dataset.box); el.disabled = na; el.closest('.opt').classList.toggle('selected', el.checked); });
+      const nb = $('input[data-na]', main); if (nb) nb.checked = na;
+      const nr = $('#naReason', main); if (nr) nr.hidden = !na;
+    }
+    refreshComputed();
+    refreshLevels(main);
+  }
+
+  // ---- status sinkron & identitas pengisi
+  function syncText() {
+    if (!sync) return '';
+    const n = sync.pendingCount();
+    const time = sync.lastOk ? sync.lastOk.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+    switch (sync.status) {
+      case 'connecting': return 'Menghubungkan ke data bersama…';
+      case 'syncing': return 'Mengirim perubahan…';
+      case 'pending': return n + ' perubahan menunggu dikirim';
+      case 'offline': return 'Offline — ' + n + ' perubahan disimpan di perangkat, dikirim saat online';
+      case 'error': return 'Gagal tersambung — ' + n + ' perubahan menunggu (dicoba lagi otomatis)';
+      default: return 'Tersinkron ' + time;
+    }
+  }
+  function askName(force) {
+    if (!ONLINE || (sync.by && !force)) return;
+    const v = prompt('Nama dan kelompok Anda (dicatat pada Riwayat Perubahan), mis. "Ani – Kelompok 2":', sync.by || '');
+    if (v !== null) { sync.by = v.trim().slice(0, 100); updateSyncBadge(); if (currentPage && currentPage.type === 'data') render(); }
+  }
+  function updateSyncBadge() {
+    if (!ONLINE) return;
+    const el = $('#saveState');
+    el.textContent = '● ' + syncText();
+    el.style.color = sync.status === 'ok' ? '#d9f7e3' : sync.status === 'error' || sync.status === 'offline' ? '#ffd2c2' : '#fff3c4';
+    el.title = (sync.error ? 'Galat: ' + sync.error + '\n' : '') + 'Pengisi: ' + (sync.by || '(belum diisi)');
+  }
+
   // ================================================================ mulai
-  const curId = LS.get(LS_CUR);
-  if (!(curId && loadSaved(curId))) model.load(M.newAssessment());
+  if (ONLINE) {
+    document.body.classList.add('online');
+    $('#btnOpen').textContent = 'Unggah file';
+    $('#btnSave').textContent = 'Simpan cadangan';
+    sync.onStatus(() => { updateSyncBadge(); });
+    $('#saveState').style.cursor = 'pointer';
+    $('#saveState').addEventListener('click', () => { location.hash = '#/data'; });
+    model.load(M.newAssessment());
+    updateSyncBadge();
+    sync.start().then(() => { render(); askName(false); });
+  } else {
+    const curId = LS.get(LS_CUR);
+    if (!(curId && loadSaved(curId))) model.load(M.newAssessment());
+  }
   render();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline tidak tersedia */ });
