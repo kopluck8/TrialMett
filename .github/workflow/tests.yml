@@ -14,3 +14,5 @@ jobs:
         run: node tests/check_excel_cache.js
       - name: Logika makro, validasi, ekspor
         run: node tests/test_logic.js
+      - name: Backend Apps Script (tiruan layanan Google)
+        run: node tests/test_sync_backend.js
